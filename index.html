@@ -19,7 +19,7 @@
             --bucket-donate: #f1c40f;
         }
 
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: #333; margin: 0; padding: 15px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: #333; margin: 0; padding: 15px; padding-bottom: 50px; }
         header { text-align: center; margin-bottom: 20px; }
         h1 { font-size: 1.5rem; color: var(--primary); margin: 0; }
         
@@ -53,29 +53,14 @@
 
         /* History */
         .history-section { border-top: 1px solid #eee; padding-top: 10px; margin-top: auto; }
-        
-        .history-header {
-            display: flex; justify-content: space-between; align-items: center;
-            cursor: pointer; padding: 5px 0;
-            user-select: none;
-        }
+        .history-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 5px 0; user-select: none; }
         .history-header:hover { background-color: #f9f9f9; border-radius: 4px; }
-        
         .history-title { font-size: 0.8rem; font-weight: bold; color: #ccc; margin: 0; }
         .toggle-icon { font-size: 0.8rem; color: #ccc; transition: transform 0.2s; }
         .toggle-icon.open { transform: rotate(180deg); }
-
-        .history-list { 
-            max-height: 0; 
-            overflow: hidden; 
-            transition: max-height 0.3s ease-out;
-        }
-        .history-list.open {
-            max-height: 200px; /* Limit height and scroll if very long */
-            overflow-y: auto;
-            border-top: 1px dashed #eee;
-            margin-top: 5px;
-        }
+        
+        .history-list { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+        .history-list.open { max-height: 200px; overflow-y: auto; border-top: 1px dashed #eee; margin-top: 5px; }
 
         .history-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f9f9f9; }
         .h-left { display: flex; flex-direction: column; }
@@ -87,10 +72,15 @@
         /* Modal */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 999; }
         .modal-content { background: white; padding: 20px; border-radius: 12px; width: 85%; max-width: 300px; text-align: center; }
-        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 16px; } /* 16px prevents zoom on iPhone */
+        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 16px; } 
         .modal-btns { display: flex; gap: 10px; margin-top: 10px; }
         .modal-btns button { flex: 1; }
         .btn-cancel { background-color: #95a5a6; }
+
+        /* Reset Section */
+        .reset-section { text-align: center; margin-top: 40px; padding-bottom: 20px; }
+        .btn-reset { background: transparent; color: #ccc; border: 1px solid #eee; padding: 8px 16px; font-size: 0.8rem; }
+        .btn-reset:hover { background: #fff0f0; color: #e74c3c; border-color: #e74c3c; }
 
         /* Status Bar */
         #status { position: fixed; bottom: 0; left: 0; width: 100%; background: #333; color: white; text-align: center; padding: 5px; font-size: 0.8rem; display: none; }
@@ -105,6 +95,10 @@
 
 <div class="container" id="app">
     <div style="text-align:center; padding: 50px; color: #999;">Loading data from cloud...<br>(If this takes too long, check your API Keys)</div>
+</div>
+
+<div class="reset-section">
+    <button class="btn-reset" onclick="hardReset()">Reset All Data</button>
 </div>
 
 <div class="modal" id="transactionModal">
@@ -127,14 +121,15 @@
     // ======================================================
     
     const firebaseConfig = {
-  apiKey: "AIzaSyBohspaWZIOL-rQTgJuInLttk_3j-heXCc",
-  authDomain: "allowance-c2ab8.firebaseapp.com",
-  projectId: "allowance-c2ab8",
-  storageBucket: "allowance-c2ab8.firebasestorage.app",
-  messagingSenderId: "933015224674",
-  appId: "1:933015224674:web:2d564c451584e7095dec3b",
-  measurementId: "G-MZSZSFMEGM"
-};
+        // REPLACE THESE LINES WITH YOUR KEYS FROM FIREBASE CONSOLE
+        apiKey: "AIzaSyD-EXAMPLE_KEY_HERE_ChangeMe",
+        authDomain: "your-project.firebaseapp.com",
+        projectId: "your-project-id",
+        storageBucket: "your-project.appspot.com",
+        messagingSenderId: "123456789",
+        appId: "1:123456:web:123456"
+    };
+
     // Initialize Firebase
     if (!firebase.apps.length) {
         firebase.initializeApp(firebaseConfig);
@@ -151,8 +146,6 @@
         child2: { name: "Child 2", buckets: { Spend: 0, Save: 0, Invest: 0, Donate: 0 }, history: [] }
     };
 
-    // UI State to track which history sections are expanded
-    // This persists even when data refreshes from the cloud
     const uiState = {
         child1: { historyExpanded: false },
         child2: { historyExpanded: false }
@@ -181,7 +174,7 @@
             const child = appData[childKey];
             const total = Object.values(child.buckets).reduce((a, b) => a + b, 0);
             
-            // Check if this child's history should be open
+            // Check expansion state
             const isExpanded = uiState[childKey].historyExpanded;
             const arrowClass = isExpanded ? 'open' : '';
             const listClass = isExpanded ? 'open' : '';
@@ -203,7 +196,7 @@
             }
 
             // History
-            const sortedHistory = [...(child.history || [])].reverse().slice(0, 15); // Last 15
+            const sortedHistory = [...(child.history || [])].reverse().slice(0, 15);
             let historyHtml = sortedHistory.map(item => {
                 const isAdd = item.action === 'add';
                 return `
@@ -245,9 +238,7 @@
     // --- ACTIONS ---
 
     function toggleHistory(childKey) {
-        // Flip the state
         uiState[childKey].historyExpanded = !uiState[childKey].historyExpanded;
-        // Re-render to update the view
         render();
     }
 
@@ -310,6 +301,19 @@
             console.error("Error updating document: ", error);
             alert("Error saving to cloud. Check console.");
         });
+    }
+
+    function hardReset() {
+        if(confirm("⚠️ WARNING: This will delete ALL balances and history for both children and reset to $0.\n\nThis cannot be undone. Are you sure?")) {
+            showStatus("Resetting...");
+            docRef.set(defaultData)
+            .then(() => {
+                showStatus("Reset Complete");
+            })
+            .catch((error) => {
+                alert("Error resetting data: " + error);
+            });
+        }
     }
 
     window.onclick = function(e) {
