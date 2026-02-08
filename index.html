@@ -135,7 +135,6 @@
   appId: "1:933015224674:web:2d564c451584e7095dec3b",
   measurementId: "G-MZSZSFMEGM"
 };
-
     // Initialize Firebase
     if (!firebase.apps.length) {
         firebase.initializeApp(firebaseConfig);
@@ -148,8 +147,8 @@
     // ======================================================
 
     const defaultData = {
-        child1: { name: "Kepler", buckets: { Spend: 0, Save: 0, Invest: 0, Donate: 0 }, history: [] },
-        child2: { name: "Rigel", buckets: { Spend: 0, Save: 0, Invest: 0, Donate: 0 }, history: [] }
+        child1: { name: "Child 1", buckets: { Spend: 0, Save: 0, Invest: 0, Donate: 0 }, history: [] },
+        child2: { name: "Child 2", buckets: { Spend: 0, Save: 0, Invest: 0, Donate: 0 }, history: [] }
     };
 
     // UI State to track which history sections are expanded
