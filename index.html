@@ -53,12 +53,34 @@
 
         /* History */
         .history-section { border-top: 1px solid #eee; padding-top: 10px; margin-top: auto; }
-        .history-title { font-size: 0.8rem; font-weight: bold; color: #ccc; margin-bottom: 5px; }
-        .history-list { max-height: 150px; overflow-y: auto; font-size: 0.8rem; }
-        .history-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f9f9f9; }
+        
+        .history-header {
+            display: flex; justify-content: space-between; align-items: center;
+            cursor: pointer; padding: 5px 0;
+            user-select: none;
+        }
+        .history-header:hover { background-color: #f9f9f9; border-radius: 4px; }
+        
+        .history-title { font-size: 0.8rem; font-weight: bold; color: #ccc; margin: 0; }
+        .toggle-icon { font-size: 0.8rem; color: #ccc; transition: transform 0.2s; }
+        .toggle-icon.open { transform: rotate(180deg); }
+
+        .history-list { 
+            max-height: 0; 
+            overflow: hidden; 
+            transition: max-height 0.3s ease-out;
+        }
+        .history-list.open {
+            max-height: 200px; /* Limit height and scroll if very long */
+            overflow-y: auto;
+            border-top: 1px dashed #eee;
+            margin-top: 5px;
+        }
+
+        .history-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f9f9f9; }
         .h-left { display: flex; flex-direction: column; }
         .h-date { font-size: 0.7rem; color: #bbb; }
-        .h-note { font-style: italic; color: #666; }
+        .h-note { font-style: italic; color: #666; font-size: 0.8rem; }
         .pos { color: var(--bucket-save); }
         .neg { color: var(--bucket-spend); }
 
@@ -77,7 +99,7 @@
 <body>
 
 <header>
-    <h1>Allowance ☁️</h1>
+    <h1>Family Allowance ☁️</h1>
     <p style="margin:5px 0 0 0; font-size: 0.9rem;">Synced across devices</p>
 </header>
 
@@ -115,7 +137,9 @@
 };
 
     // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
     const db = firebase.firestore();
     const docRef = db.collection("family").doc("allowanceData");
 
@@ -128,17 +152,22 @@
         child2: { name: "Rigel", buckets: { Spend: 0, Save: 0, Invest: 0, Donate: 0 }, history: [] }
     };
 
+    // UI State to track which history sections are expanded
+    // This persists even when data refreshes from the cloud
+    const uiState = {
+        child1: { historyExpanded: false },
+        child2: { historyExpanded: false }
+    };
+
     let appData = null;
     let currentChild = null, currentBucket = null, currentAction = null;
 
     // --- REAL-TIME LISTENER ---
-    // This runs automatically whenever the database changes on ANY device
     docRef.onSnapshot((doc) => {
         if (doc.exists) {
             appData = doc.data();
             render();
         } else {
-            // First time setup: create the document
             console.log("Creating database...");
             docRef.set(defaultData);
         }
@@ -152,6 +181,11 @@
         ['child1', 'child2'].forEach(childKey => {
             const child = appData[childKey];
             const total = Object.values(child.buckets).reduce((a, b) => a + b, 0);
+            
+            // Check if this child's history should be open
+            const isExpanded = uiState[childKey].historyExpanded;
+            const arrowClass = isExpanded ? 'open' : '';
+            const listClass = isExpanded ? 'open' : '';
 
             // Buckets
             let bucketsHtml = '';
@@ -170,7 +204,7 @@
             }
 
             // History
-            const sortedHistory = [...(child.history || [])].reverse().slice(0, 10); // Last 10
+            const sortedHistory = [...(child.history || [])].reverse().slice(0, 15); // Last 15
             let historyHtml = sortedHistory.map(item => {
                 const isAdd = item.action === 'add';
                 return `
@@ -184,6 +218,8 @@
                 `;
             }).join('');
 
+            if(historyHtml === '') historyHtml = '<div style="padding:10px; color:#ccc; font-style:italic;">No recent activity</div>';
+
             const childDiv = document.createElement('div');
             childDiv.className = 'child-column';
             childDiv.innerHTML = `
@@ -192,9 +228,15 @@
                     <span class="total-balance">$${total.toFixed(2)}</span>
                 </div>
                 <div class="bucket-grid">${bucketsHtml}</div>
+                
                 <div class="history-section">
-                    <div class="history-title">RECENT ACTIVITY</div>
-                    <div class="history-list">${historyHtml || 'No activity'}</div>
+                    <div class="history-header" onclick="toggleHistory('${childKey}')">
+                        <div class="history-title">RECENT ACTIVITY</div>
+                        <div class="toggle-icon ${arrowClass}">▼</div>
+                    </div>
+                    <div class="history-list ${listClass}">
+                        ${historyHtml}
+                    </div>
                 </div>
             `;
             appContainer.appendChild(childDiv);
@@ -202,6 +244,13 @@
     }
 
     // --- ACTIONS ---
+
+    function toggleHistory(childKey) {
+        // Flip the state
+        uiState[childKey].historyExpanded = !uiState[childKey].historyExpanded;
+        // Re-render to update the view
+        render();
+    }
 
     function showStatus(msg) {
         const el = document.getElementById('status');
@@ -240,7 +289,7 @@
         
         if (isNaN(amt) || amt <= 0) { alert("Invalid amount"); return; }
 
-        // Optimistic UI update (update local data immediately)
+        // Optimistic UI update
         if (currentAction === 'add') appData[currentChild].buckets[currentBucket] += amt;
         else appData[currentChild].buckets[currentBucket] -= amt;
 
