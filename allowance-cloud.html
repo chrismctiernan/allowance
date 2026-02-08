@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Family Allowance (Cloud)</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --bg: #f4f7f6;
+            --card-bg: #ffffff;
+            --bucket-spend: #e74c3c;
+            --bucket-save: #2ecc71;
+            --bucket-invest: #9b59b6;
+            --bucket-donate: #f1c40f;
+        }
+
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: #333; margin: 0; padding: 15px; }
+        header { text-align: center; margin-bottom: 20px; }
+        h1 { font-size: 1.5rem; color: var(--primary); margin: 0; }
+        
+        /* Layout */
+        .container { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; max-width: 1000px; margin: 0 auto; }
+        .child-column { flex: 1; min-width: 320px; background: var(--card-bg); border-radius: 12px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        
+        /* Headers */
+        .child-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
+        .child-header h2 { margin: 0; font-size: 1.2rem; cursor: pointer; border-bottom: 1px dashed #ccc; }
+        .total-balance { font-weight: bold; color: #666; font-size: 1rem; }
+
+        /* Grid */
+        .bucket-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        
+        /* Cards */
+        .bucket-card { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 10px; text-align: center; position: relative; }
+        .bucket-title { font-size: 0.75rem; text-transform: uppercase; font-weight: bold; color: #888; letter-spacing: 0.5px; }
+        .bucket-amount { font-size: 1.3rem; font-weight: bold; margin: 5px 0; }
+        
+        .b-spend { color: var(--bucket-spend); border-top: 3px solid var(--bucket-spend); }
+        .b-save { color: var(--bucket-save); border-top: 3px solid var(--bucket-save); }
+        .b-invest { color: var(--bucket-invest); border-top: 3px solid var(--bucket-invest); }
+        .b-donate { color: var(--bucket-donate); border-top: 3px solid var(--bucket-donate); }
+
+        /* Buttons */
+        .actions { display: flex; gap: 5px; justify-content: center; margin-top: 5px; }
+        button { border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; font-size: 0.9rem; touch-action: manipulation; }
+        .btn-add { background-color: var(--primary); }
+        .btn-sub { background-color: #e74c3c; }
+
+        /* History */
+        .history-section { border-top: 1px solid #eee; padding-top: 10px; margin-top: auto; }
+        .history-title { font-size: 0.8rem; font-weight: bold; color: #ccc; margin-bottom: 5px; }
+        .history-list { max-height: 150px; overflow-y: auto; font-size: 0.8rem; }
+        .history-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f9f9f9; }
+        .h-left { display: flex; flex-direction: column; }
+        .h-date { font-size: 0.7rem; color: #bbb; }
+        .h-note { font-style: italic; color: #666; }
+        .pos { color: var(--bucket-save); }
+        .neg { color: var(--bucket-spend); }
+
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 999; }
+        .modal-content { background: white; padding: 20px; border-radius: 12px; width: 85%; max-width: 300px; text-align: center; }
+        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 16px; } /* 16px prevents zoom on iPhone */
+        .modal-btns { display: flex; gap: 10px; margin-top: 10px; }
+        .modal-btns button { flex: 1; }
+        .btn-cancel { background-color: #95a5a6; }
+
+        /* Status Bar */
+        #status { position: fixed; bottom: 0; left: 0; width: 100%; background: #333; color: white; text-align: center; padding: 5px; font-size: 0.8rem; display: none; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Family Allowance ☁️</h1>
+    <p style="margin:5px 0 0 0; font-size: 0.9rem;">Synced across devices</p>
+</header>
+
+<div class="container" id="app">
+    <div style="text-align:center; padding: 50px; color: #999;">Loading data from cloud...<br>(If this takes too long, check your API Keys)</div>
+</div>
+
+<div class="modal" id="transactionModal">
+    <div class="modal-content">
+        <h3 id="modalTitle">Update</h3>
+        <input type="number" id="amountInput" placeholder="$0.00" inputmode="decimal">
+        <input type="text" id="noteInput" placeholder="Note (Optional)">
+        <div class="modal-btns">
+            <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+            <button class="btn-add" id="confirmBtn" onclick="confirmTransaction()">Save</button>
+        </div>
+    </div>
+</div>
+
+<div id="status">Saving...</div>
+
+<script>
+    // ======================================================
+    // 1. CONFIGURATION - PASTE YOUR KEYS BELOW
+    // ======================================================
+    
+    const firebaseConfig = {
+        // REPLACE THESE LINES WITH YOUR KEYS FROM FIREBASE CONSOLE
+        apiKey: "AIzaSyD-EXAMPLE_KEY_HERE_ChangeMe",
+        authDomain: "your-project.firebaseapp.com",
+        projectId: "your-project-id",
+        storageBucket: "your-project.appspot.com",
+        messagingSenderId: "123456789",
+        appId: "1:123456:web:123456"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const docRef = db.collection("family").doc("allowanceData");
+
+    // ======================================================
+    // 2. APP LOGIC
+    // ======================================================
+
+    const defaultData = {
+        child1: { name: "Child 1", buckets: { Spend: 0, Save: 0, Invest: 0, Donate: 0 }, history: [] },
+        child2: { name: "Child 2", buckets: { Spend: 0, Save: 0, Invest: 0, Donate: 0 }, history: [] }
+    };
+
+    let appData = null;
+    let currentChild = null, currentBucket = null, currentAction = null;
+
+    // --- REAL-TIME LISTENER ---
+    // This runs automatically whenever the database changes on ANY device
+    docRef.onSnapshot((doc) => {
+        if (doc.exists) {
+            appData = doc.data();
+            render();
+        } else {
+            // First time setup: create the document
+            console.log("Creating database...");
+            docRef.set(defaultData);
+        }
+    });
+
+    // --- RENDERING ---
+    function render() {
+        const appContainer = document.getElementById('app');
+        appContainer.innerHTML = '';
+
+        ['child1', 'child2'].forEach(childKey => {
+            const child = appData[childKey];
+            const total = Object.values(child.buckets).reduce((a, b) => a + b, 0);
+
+            // Buckets
+            let bucketsHtml = '';
+            for (const [bucket, amount] of Object.entries(child.buckets)) {
+                const colorClass = `b-${bucket.toLowerCase()}`;
+                bucketsHtml += `
+                    <div class="bucket-card ${colorClass}">
+                        <div class="bucket-title">${bucket}</div>
+                        <div class="bucket-amount">$${amount.toFixed(2)}</div>
+                        <div class="actions">
+                            <button class="btn-sub" onclick="openModal('${childKey}', '${bucket}', 'subtract')">-</button>
+                            <button class="btn-add" onclick="openModal('${childKey}', '${bucket}', 'add')">+</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // History
+            const sortedHistory = [...(child.history || [])].reverse().slice(0, 10); // Last 10
+            let historyHtml = sortedHistory.map(item => {
+                const isAdd = item.action === 'add';
+                return `
+                    <div class="history-item">
+                        <div class="h-left">
+                            <span style="font-weight:bold; color:var(--bucket-${item.bucket.toLowerCase()})">${item.bucket}</span>
+                            <span class="h-date">${item.date} ${item.note ? '- ' + item.note : ''}</span>
+                        </div>
+                        <div class="${isAdd ? 'pos' : 'neg'}">${isAdd ? '+' : '-'}$${item.amount.toFixed(2)}</div>
+                    </div>
+                `;
+            }).join('');
+
+            const childDiv = document.createElement('div');
+            childDiv.className = 'child-column';
+            childDiv.innerHTML = `
+                <div class="child-header">
+                    <h2 onclick="rename('${childKey}')">${child.name} ✎</h2>
+                    <span class="total-balance">$${total.toFixed(2)}</span>
+                </div>
+                <div class="bucket-grid">${bucketsHtml}</div>
+                <div class="history-section">
+                    <div class="history-title">RECENT ACTIVITY</div>
+                    <div class="history-list">${historyHtml || 'No activity'}</div>
+                </div>
+            `;
+            appContainer.appendChild(childDiv);
+        });
+    }
+
+    // --- ACTIONS ---
+
+    function showStatus(msg) {
+        const el = document.getElementById('status');
+        el.innerText = msg;
+        el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 2000);
+    }
+
+    function rename(childKey) {
+        const newName = prompt("Enter new name:", appData[childKey].name);
+        if (newName) {
+            appData[childKey].name = newName;
+            saveToCloud();
+        }
+    }
+
+    function openModal(childKey, bucket, action) {
+        currentChild = childKey; currentBucket = bucket; currentAction = action;
+        const modal = document.getElementById('transactionModal');
+        document.getElementById('modalTitle').innerText = `${action === 'add' ? 'Add to' : 'Deduct from'} ${bucket}`;
+        document.getElementById('confirmBtn').className = action === 'add' ? 'btn-add' : 'btn-sub';
+        document.getElementById('amountInput').value = '';
+        document.getElementById('noteInput').value = '';
+        modal.style.display = 'flex';
+        document.getElementById('amountInput').focus();
+    }
+
+    function closeModal() {
+        document.getElementById('transactionModal').style.display = 'none';
+        currentChild = null;
+    }
+
+    function confirmTransaction() {
+        const amt = parseFloat(document.getElementById('amountInput').value);
+        const note = document.getElementById('noteInput').value.trim();
+        
+        if (isNaN(amt) || amt <= 0) { alert("Invalid amount"); return; }
+
+        // Optimistic UI update (update local data immediately)
+        if (currentAction === 'add') appData[currentChild].buckets[currentBucket] += amt;
+        else appData[currentChild].buckets[currentBucket] -= amt;
+
+        appData[currentChild].history.push({
+            date: new Date().toLocaleDateString(),
+            bucket: currentBucket,
+            action: currentAction,
+            amount: amt,
+            note: note
+        });
+
+        saveToCloud();
+        closeModal();
+    }
+
+    function saveToCloud() {
+        showStatus("Syncing...");
+        docRef.update(appData).catch(error => {
+            console.error("Error updating document: ", error);
+            alert("Error saving to cloud. Check console.");
+        });
+    }
+
+    window.onclick = function(e) {
+        if (e.target == document.getElementById('transactionModal')) closeModal();
+    }
+</script>
+</body>
+</html>
